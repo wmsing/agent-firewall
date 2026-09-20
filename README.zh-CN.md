@@ -118,6 +118,18 @@ go run . -backend=false -target http://127.0.0.1:8090
 
 见 `.cursor/mcp.json.example`（自动识别工作区是 `agent-firewall` 还是上级 monorepo 里的 `jev_demo`）
 
+### 刷新已安装的二进制
+
+默认 **`scripts/run-mcp-firewall.sh`** 走 `go run`：改代码或 [`eval/rules.json`](eval/rules.json) 后，在 Cursor **Reload MCP** 即可，**不必**手动 `go build`。
+
+若 `mcp.json` 的 **`command`** 指向固定二进制（如 `~/.local/bin/mcp-firewall`），改完后需重新编译覆盖，再 **Reload MCP**：
+
+```bash
+cd /path/to/agent-firewall
+go build -o ~/.local/bin/mcp-firewall ./cmd/mcp-firewall
+ls -la ~/.local/bin/mcp-firewall   # 修改时间应为刚刚
+```
+
 - [ ] monorepo 若仍报错：确认日志里不是 `stat .../jev_demo/cmd/mcp-firewall`（旧配置）；Reload MCP
 - [ ] MCP 报 `go: command not found`：在 `mcp.json` 加 `env.PATH`（含 Homebrew），或把 `command` 改成 `which go` 的绝对路径
 - [ ] Agent 规则（建议 `alwaysApply`）：终端**只**走 `execute_bash_command`；`isError: true` 或 `firewall BLOCK` → **停**，别绕过

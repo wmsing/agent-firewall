@@ -174,6 +174,18 @@ go run . -backend=false -target http://127.0.0.1:8090
 
 See `.cursor/mcp.json.example` (detects `agent-firewall` vs `jev_demo` workspace layout).
 
+### Refresh installed binary
+
+Default **`scripts/run-mcp-firewall.sh`** uses `go run`—after code or [`eval/rules.json`](eval/rules.json) changes, **Reload MCP** in Cursor (no manual build).
+
+If `mcp.json` **`command`** points at a fixed binary (e.g. `~/.local/bin/mcp-firewall`), rebuild and overwrite after changes, then **Reload MCP**:
+
+```bash
+cd /path/to/agent-firewall
+go build -o ~/.local/bin/mcp-firewall ./cmd/mcp-firewall
+ls -la ~/.local/bin/mcp-firewall   # mtime should be just now
+```
+
 - [ ] Monorepo errors: ensure logs are not `stat .../jev_demo/cmd/mcp-firewall` (stale config); Reload MCP
 - [ ] `go: command not found`: set `env.PATH` in `mcp.json` (e.g. Homebrew) or use absolute path to `go`
 - [ ] Agent rules (`alwaysApply` recommended): shell **only** via `execute_bash_command`; on `isError: true` or `firewall BLOCK` → **stop**, do not bypass
