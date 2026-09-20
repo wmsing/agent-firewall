@@ -123,22 +123,26 @@ firewall BLOCK [hard_rule]: rm_rf
 
 ## Architecture
 
-| Layer | Process | Inspected payload | When to use |
-|-------|---------|-----------------|-------------|
+| Entry | Process | Inspected payload | When to use |
+|-------|---------|-------------------|-------------|
 | **L7** | `agent-firewall` → `:8286` | POST/PUT/DELETE bodies | Agents use REST as tools |
 | **MCP** | `mcp-firewall` (stdio) | `execute_bash_command` strings | Cursor / Claude terminal tools |
 
-**Shared `eval` package**
+Both paths call the same **`eval.Assess`** pipeline—two layers, always in order:
 
-1. **Hard rules** — see [Threat & rules matrix](#threat--rules-matrix) ([`eval/rules.json`](eval/rules.json), `go:embed`; rebuild or restart MCP after edits)  
-2. **Semantic scoring** — Mock or HTTP / TypeSafe evaluator; **score ≥ 0.8** → **BLOCK**
+| Pipeline layer | Name | Role |
+|----------------|------|------|
+| **Layer 1** | **Local zero-latency hard rules** | Embedded regex rules ([`eval/rules.json`](eval/rules.json), `go:embed`) match known destructive patterns (`rm_rf`, `git_danger`, `secret_leak`, …) with no network I/O. |
+| **Layer 2** | **TypeSafe Jev semantic engine** | When `TYPESAFE_API_KEY` is set, commands and HTTP bodies are scored via TypeSafe **System One** (`POST /v1/systemone`, model `jev-latest`) for **obfuscation** (e.g. Base64 pipelines) and **intent** beyond literal strings. **Score ≥ 0.8** → **BLOCK**. |
+
+If Layer 1 matches, Layer 2 is skipped. With no TypeSafe credentials, Layer 2 falls back to the built-in **Mock** evaluator (offline, no API calls)—enough for CI and obvious injection strings; configure TypeSafe for full obfuscation coverage.
 
 ```text
-  HTTP (POST/PUT/DEL) ──► :8286 ──► hard rules → score ──► upstream API
+  HTTP (POST/PUT/DEL) ──► :8286 ──► L1 hard rules ──► L2 semantic score ──► upstream API
   GET passthrough · body > 1MB → 413
 
-  MCP execute_bash_* ──► mcp-firewall ──► same eval ──► /bin/bash -c
-  BLOCK → isError + reason
+  MCP execute_bash_* ──► mcp-firewall ──► same L1 → L2 ──► /bin/bash -c
+  BLOCK → isError + reason (layer: hard_rule | semantic)
 ```
 
 ### Viewing the interactive diagram
@@ -215,13 +219,21 @@ go build -o ~/.local/bin/mcp-firewall ./cmd/mcp-firewall
   "mcpServers": {
     "agent-firewall": {
       "command": "/Users/<username>/.local/bin/mcp-firewall",
-      "args": []
+      "args": [],
+      "env": {
+        "TYPESAFE_API_KEY": "",
+        "TYPESAFE_BASE_URL": "https://api.typesafe.ai"
+      }
     }
   }
 }
 ```
 
-Replace `<username>` with your macOS login name (full path example: `/Users/you/.local/bin/mcp-firewall`). **Restart Cursor** (or Reload MCP) to activate system-wide `execute_bash_command` interception. Project-local `.cursor/mcp.json` still overrides per-repo when present.
+Replace `<username>` with your macOS login name (full path example: `/Users/you/.local/bin/mcp-firewall`).
+
+**TypeSafe `env` (optional)** — Set `TYPESAFE_API_KEY` to your key to enable **Layer 2** (Jev semantic scoring). `TYPESAFE_BASE_URL` defaults to `https://api.typesafe.ai` when empty. Omit the `env` block or leave `TYPESAFE_API_KEY` blank for **local mode**: Layer 1 hard rules always run; Layer 2 uses the offline **Mock** evaluator (no TypeSafe calls). Do not commit real keys; use Cursor user config or a local `.env` loaded by your wrapper script.
+
+**Restart Cursor** (or Reload MCP) after edits. Project-local `.cursor/mcp.json` still overrides per-repo when present.
 
 Pair with agent rules (`alwaysApply`): terminal **only** via `execute_bash_command`; on `firewall BLOCK` → stop, do not bypass.
 
@@ -246,6 +258,29 @@ ls -la ~/.local/bin/mcp-firewall   # mtime should be just now
 ```bash
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_bash_command","arguments":{"command":"rm -rf /"}}}' | go run ./cmd/mcp-firewall
 ```
+
+### Obfuscation & intent testing
+
+With **`TYPESAFE_API_KEY`** set on the MCP process (see [global `mcp.json`](#global-cursor-mcp-setup-all-workspaces)), ask the agent to run shell only via `execute_bash_command`:
+
+| Intent | Command | Expected |
+|--------|---------|----------|
+| Benign decode | `echo "aGVsbG8=" \| base64 -d` | Runs; output `hello` |
+| Obfuscated destructive | `echo "cm0gLXJmIC8=" \| base64 -d \| sh` | `firewall BLOCK [semantic]: typesafe: … (score≥0.8)` — decoded payload is `rm -rf /` without matching Layer 1 on the outer string |
+
+One-liner checks (export `TYPESAFE_API_KEY` first for the malicious case):
+
+```bash
+# Allow: benign Base64
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_bash_command","arguments":{"command":"echo \"aGVsbG8=\" | base64 -d"}}}' \
+  | go run ./cmd/mcp-firewall
+
+# Block: Base64 → sh (requires TypeSafe Layer 2)
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_bash_command","arguments":{"command":"echo \"cm0gLXJmIC8=\" | base64 -d | sh"}}}' \
+  | go run ./cmd/mcp-firewall
+```
+
+Integration coverage: `make check-firewall`.
 
 ---
 

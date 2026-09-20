@@ -19,6 +19,7 @@
 | 克隆并跑测试 | [30 秒上手](#30-秒上手) |
 | 起 HTTP 网关 | [L7 网关](#l7-网关) |
 | 接 Cursor MCP | [MCP（Cursor）](#mcpcursor) |
+| 全工作区 MCP | [全局 Cursor MCP](#全局-cursor-mcp全工作区) |
 | 配语义判别 API | [环境变量](#环境变量) |
 | 看懂两层干啥 | [两层一览](#两层一览) |
 | 看交互架构图 | [两层一览](#两层一览) · [打开 HTML](#架构图本地查看) |
@@ -29,22 +30,26 @@
 
 ## 两层一览
 
-| 层 | 跑什么 | 查什么 | 啥时候用 |
-|----|--------|--------|----------|
+| 入口 | 进程 | 检查对象 | 啥时候用 |
+|------|------|----------|----------|
 | **L7** | `agent-firewall` → `:8286` | POST/PUT/DELETE 的 body | Agent 把 REST 当 Tool |
 | **MCP** | `mcp-firewall`（stdio） | `execute_bash_command` 里的命令串 | Cursor / Claude 终端工具 |
 
-**同一套 `eval`**
+两条路径都走同一套 **`eval.Assess`** 管线，固定顺序两层：
 
-1. **硬规则** — `DROP TABLE`、`TRUNCATE`、`rm -rf` 等 → 直接 BLOCK（规则表 [`eval/rules.json`](eval/rules.json)，`go:embed` 打进二进制；改后重新 `go build` 或重启 MCP 进程）  
-2. **语义分** — Mock，或 HTTP 判别器；分数 **≥ 0.8** → BLOCK  
+| 管线层 | 名称 | 作用 |
+|--------|------|------|
+| **Layer 1** | **本地零延迟硬规则** | 内嵌正则（[`eval/rules.json`](eval/rules.json)，`go:embed`）匹配已知破坏模式（`rm_rf`、`git_danger`、`secret_leak` 等），无网络 I/O。 |
+| **Layer 2** | **TypeSafe Jev 语义引擎** | 配置 `TYPESAFE_API_KEY` 后，对命令与 HTTP body 调用 TypeSafe **System One**（`POST /v1/systemone`，模型 `jev-latest`），识别 **混淆**（如 Base64 管道）与字面串之外的 **意图**。**分数 ≥ 0.8** → **BLOCK**。 |
+
+Layer 1 命中则跳过 Layer 2。未配置 TypeSafe 时，Layer 2 回退为内置 **Mock** 判别器（离线、不调 API）——适合 CI 与明显注入样例；要覆盖混淆类攻击需配置 TypeSafe。
 
 ```text
-  HTTP (POST/PUT/DEL) ──► :8286 ──► hard rules → score ──► 上游 API
+  HTTP (POST/PUT/DEL) ──► :8286 ──► L1 硬规则 ──► L2 语义分 ──► 上游 API
   GET 直通 · body > 1MB → 413
 
-  MCP execute_bash_* ──► mcp-firewall ──► 同一 eval ──► /bin/bash -c
-  BLOCK → isError + reason
+  MCP execute_bash_* ──► mcp-firewall ──► 同一 L1 → L2 ──► /bin/bash -c
+  BLOCK → isError + reason（layer: hard_rule | semantic）
 ```
 
 **架构图（Archify）**：源稿 [`docs/diagrams/agent-firewall.architecture.json`](docs/diagrams/agent-firewall.architecture.json) · 自包含页 [`docs/diagrams/agent-firewall-architecture.html`](docs/diagrams/agent-firewall-architecture.html)
@@ -118,6 +123,40 @@ go run . -backend=false -target http://127.0.0.1:8090
 
 见 `.cursor/mcp.json.example`（自动识别工作区是 `agent-firewall` 还是上级 monorepo 里的 `jev_demo`）
 
+### 全局 Cursor MCP（全工作区）
+
+编译一次二进制，写入 **用户级** Cursor 配置，让所有工作区的 Agent 终端都经防火墙（改完后需重启 Cursor 或 Reload MCP）。
+
+```bash
+cd /path/to/agent-firewall
+go build -o ~/.local/bin/mcp-firewall ./cmd/mcp-firewall
+```
+
+`~/.cursor/mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "agent-firewall": {
+      "command": "/Users/<username>/.local/bin/mcp-firewall",
+      "args": [],
+      "env": {
+        "TYPESAFE_API_KEY": "",
+        "TYPESAFE_BASE_URL": "https://api.typesafe.ai"
+      }
+    }
+  }
+}
+```
+
+将 `<username>` 换成你的 macOS 登录名（示例：`/Users/you/.local/bin/mcp-firewall`）。
+
+**TypeSafe `env`（可选）** — 填入 `TYPESAFE_API_KEY` 以启用 **Layer 2**（Jev 语义打分）。`TYPESAFE_BASE_URL` 留空时默认为 `https://api.typesafe.ai`。省略 `env` 或留空 `TYPESAFE_API_KEY` 即为 **本地模式**：Layer 1 硬规则始终生效；Layer 2 使用离线 **Mock**（不调用 TypeSafe）。勿提交真实 Key；用 Cursor 用户配置或本地 `.env`（由启动脚本加载）。
+
+项目内 `.cursor/mcp.json` 仍可按仓库覆盖上述全局配置。
+
+配合 Agent 规则（建议 `alwaysApply`）：终端**只**走 `execute_bash_command`；出现 `firewall BLOCK` → **停**，勿绕过。
+
 ### 刷新已安装的二进制
 
 默认 **`scripts/run-mcp-firewall.sh`** 走 `go run`：改代码或 [`eval/rules.json`](eval/rules.json) 后，在 Cursor **Reload MCP** 即可，**不必**手动 `go build`。
@@ -139,6 +178,29 @@ ls -la ~/.local/bin/mcp-firewall   # 修改时间应为刚刚
 ```bash
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_bash_command","arguments":{"command":"rm -rf /"}}}' | go run ./cmd/mcp-firewall
 ```
+
+### 混淆与意图测试
+
+在 MCP 进程上配置好 **`TYPESAFE_API_KEY`**（见 [全局 `mcp.json`](#全局-cursor-mcp全工作区)）后，让 Agent 仅通过 `execute_bash_command` 执行：
+
+| 意图 | 命令 | 预期 |
+|------|------|------|
+| 无害解码 | `echo "aGVsbG8=" \| base64 -d` | 执行成功；输出 `hello` |
+| 混淆破坏 | `echo "cm0gLXJmIC8=" \| base64 -d \| sh` | `firewall BLOCK [semantic]: typesafe: …（score≥0.8）` — 解码后为 `rm -rf /`，外层字符串未命中 Layer 1 |
+
+单行自检（恶意样例需先 `export TYPESAFE_API_KEY`）：
+
+```bash
+# 放行：无害 Base64
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_bash_command","arguments":{"command":"echo \"aGVsbG8=\" | base64 -d"}}}' \
+  | go run ./cmd/mcp-firewall
+
+# 拦截：Base64 → sh（依赖 TypeSafe Layer 2）
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_bash_command","arguments":{"command":"echo \"cm0gLXJmIC8=\" | base64 -d | sh"}}}' \
+  | go run ./cmd/mcp-firewall
+```
+
+集成验收：`make check-firewall`。
 
 ---
 
