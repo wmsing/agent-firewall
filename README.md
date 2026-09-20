@@ -15,6 +15,7 @@
 | 接 Cursor MCP | [MCP（Cursor）](#mcpcursor) |
 | 配语义判别 API | [环境变量](#环境变量) |
 | 看懂两层干啥 | [两层一览](#两层一览) |
+| 改硬规则 | [两层一览](#两层一览) · `eval/rules.json` |
 
 ---
 
@@ -27,7 +28,7 @@
 
 **同一套 `eval`**
 
-1. **硬规则** — `DROP TABLE`、`TRUNCATE`、`rm -rf` 等 → 直接 BLOCK  
+1. **硬规则** — `DROP TABLE`、`TRUNCATE`、`rm -rf` 等 → 直接 BLOCK（规则表 [`eval/rules.json`](eval/rules.json)，`go:embed` 打进二进制；改后重新 `go build` 或重启 MCP 进程）  
 2. **语义分** — Mock，或 HTTP 判别器；分数 **≥ 0.8** → BLOCK  
 
 ```text
@@ -72,7 +73,7 @@ go run . -backend=false -target http://127.0.0.1:8090
 
 ### Checklist
 
-- [ ] 复制 `.cursor/mcp.json.example` → `.cursor/mcp.json`（`scripts/run-mcp-firewall.sh`；改规则后 **Reload MCP**）
+- [ ] 复制 `.cursor/mcp.json.example` → `.cursor/mcp.json`（`scripts/run-mcp-firewall.sh`；改 **Cursor Agent 规则** 后 **Reload MCP**；改 **硬规则** 见 `eval/rules.json` 后重建/重启 MCP）
 - [ ] 工作区是上级 monorepo `jev_demo`：用 `jev_demo/.cursor/mcp.json`（已含 `agent-firewall/scripts/...`），勿用顶层 `go run ./cmd/mcp-firewall`
 - [ ] 生产/CI 仍可用二进制：`go build -o mcp-firewall ./cmd/mcp-firewall`，`command` 指该文件
 

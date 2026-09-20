@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -20,19 +19,6 @@ const evaluatorHTTPTimeout = 300 * time.Millisecond
 
 type RiskEvaluator interface {
 	Evaluate(ctx context.Context, body []byte) (score float64, reason string, err error)
-}
-
-type hardRule struct {
-	name    string
-	pattern *regexp.Regexp
-}
-
-var hardRules = []hardRule{
-	{name: "drop_table", pattern: regexp.MustCompile(`(?i)\bDROP\s+TABLE\b`)},
-	{name: "truncate", pattern: regexp.MustCompile(`(?i)\bTRUNCATE\b`)},
-	{name: "rm_rf", pattern: regexp.MustCompile(`(?i)rm\s+-rf`)},
-	{name: "git_danger", pattern: regexp.MustCompile(`(?i)\bgit(\s+-C\s+\S+|\s+--git-dir=\S+)*\s+(push|pull|reset|clean|rebase|filter-branch|filter-repo|remote|config|credential|send-email)\b`)},
-	{name: "git_supply", pattern: regexp.MustCompile(`(?i)\bgit(\s+-C\s+\S+|\s+--git-dir=\S+)*\s+(clone|submodule)\b`)},
 }
 
 func MatchHardRule(body []byte) (matched bool, rule string) {

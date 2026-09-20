@@ -1,0 +1,7 @@
+[
+  {"name": "drop_table", "pattern": "(?i)\\bDROP\\s+TABLE\\b"},
+  {"name": "truncate", "pattern": "(?i)\\bTRUNCATE\\b"},
+  {"name": "rm_rf", "pattern": "(?i)rm\\s+-rf"},
+  {"name": "git_danger", "pattern": "(?i)\\bgit(\\s+-C\\s+\\S+|\\s+--git-dir=\\S+)*\\s+(push|pull|reset|clean|rebase|filter-branch|filter-repo|remote|config|credential|send-email)\\b"},
+  {"name": "git_supply", "pattern": "(?i)\\bgit(\\s+-C\\s+\\S+|\\s+--git-dir=\\S+)*\\s+(clone|submodule)\\b"}
+]
