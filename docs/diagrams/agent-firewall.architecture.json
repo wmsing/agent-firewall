@@ -2,74 +2,74 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "agent-firewall：L7 与 MCP 共用 eval",
-    "locale": "zh-CN",
+    "title": "agent-firewall: L7 and MCP share eval",
+    "locale": "en",
     "output": "agent-firewall-architecture.html",
     "quality_profile": "showcase",
     "viewBox": [1100, 680],
     "views": [
       {
         "id": "http-path",
-        "label": "HTTP 路径",
+        "label": "HTTP path",
         "focus": ["http-agent", "l7", "eval", "scorer", "upstream"],
-        "note": "POST/PUT/DELETE body 经 :8286 进入同一套 Assess。"
+        "note": "POST/PUT/DELETE bodies enter the same Assess pipeline via :8286."
       },
       {
         "id": "mcp-path",
-        "label": "MCP 路径",
+        "label": "MCP path",
         "focus": ["mcp-agent", "mcp-fw", "eval", "bash"],
-        "note": "execute_bash_command 命令串经 mcp-firewall 进入 Assess。"
+        "note": "execute_bash_command strings enter Assess via mcp-firewall."
       },
       {
         "id": "eval-core",
-        "label": "eval 核心",
+        "label": "eval core",
         "focus": ["rules", "eval", "scorer"],
-        "note": "硬规则 → 语义分；≥0.8 或 evaluator 错误均 fail-closed。"
+        "note": "Hard rules → semantic score; ≥0.8 or evaluator error → fail-closed."
       }
     ]
   },
   "components": [
     { "id": "http-agent", "type": "external", "label": "Agent", "sublabel": "HTTP Tool", "pos": [40, 170], "size": [120, 58] },
-    { "id": "mcp-agent", "type": "external", "label": "Cursor / Agent", "sublabel": "MCP 客户端", "pos": [40, 400], "size": [130, 58] },
-    { "id": "l7", "type": "backend", "label": "agent-firewall", "sublabel": "L7 :8286", "pos": [240, 155], "size": [140, 64], "tag": "GET 直通" },
+    { "id": "mcp-agent", "type": "external", "label": "Cursor / Agent", "sublabel": "MCP client", "pos": [40, 400], "size": [130, 58] },
+    { "id": "l7", "type": "backend", "label": "agent-firewall", "sublabel": "L7 :8286", "pos": [240, 155], "size": [140, 64], "tag": "GET passthrough" },
     { "id": "mcp-fw", "type": "backend", "label": "mcp-firewall", "sublabel": "stdio MCP", "pos": [240, 385], "size": [140, 64] },
-    { "id": "eval", "type": "security", "label": "eval.Assess", "sublabel": "硬规则 → 语义", "pos": [480, 230], "size": [150, 70], "tag": "fail-closed" },
+    { "id": "eval", "type": "security", "label": "eval.Assess", "sublabel": "Hard rules → Semantic scoring", "pos": [480, 230], "size": [150, 70], "tag": "fail-closed" },
     { "id": "rules", "type": "database", "label": "rules.json", "sublabel": "go:embed", "pos": [485, 95], "size": [140, 58] },
     { "id": "scorer", "type": "backend", "label": "RiskEvaluator", "sublabel": "Mock / HTTP API", "pos": [480, 390], "size": [150, 64] },
-    { "id": "upstream", "type": "backend", "label": "上游 API", "sublabel": "例 :8287", "pos": [960, 155], "size": [120, 58] },
-    { "id": "bash", "type": "backend", "label": "/bin/bash", "sublabel": "-c 命令", "pos": [960, 385], "size": [120, 58] }
+    { "id": "upstream", "type": "backend", "label": "Upstream API", "sublabel": "e.g. :8287", "pos": [960, 155], "size": [120, 58] },
+    { "id": "bash", "type": "backend", "label": "/bin/bash", "sublabel": "-c command", "pos": [960, 385], "size": [120, 58] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "共享 eval 包", "wraps": ["rules", "eval", "scorer"] }
+    { "kind": "region", "label": "Shared eval package", "wraps": ["rules", "eval", "scorer"] }
   ],
   "connections": [
     { "id": "http-to-l7", "from": "http-agent", "to": "l7", "label": "POST/PUT/DEL", "variant": "emphasis" },
     { "id": "mcp-to-fw", "from": "mcp-agent", "to": "mcp-fw", "label": "execute_bash", "variant": "emphasis", "labelAt": [205, 472] },
     { "id": "l7-to-eval", "from": "l7", "to": "eval", "label": "body" },
     { "id": "fw-to-eval", "from": "mcp-fw", "to": "eval", "label": "command" },
-    { "id": "eval-to-scorer", "from": "eval", "to": "scorer", "label": "语义打分", "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
+    { "id": "eval-to-scorer", "from": "eval", "to": "scorer", "label": "Semantic scoring", "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
     { "id": "l7-to-upstream", "from": "l7", "to": "upstream", "label": "ALLOW", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
     { "id": "fw-to-bash", "from": "mcp-fw", "to": "bash", "label": "ALLOW", "variant": "emphasis", "fromSide": "bottom", "via": [[310, 470], [960, 470]], "labelAt": [635, 468] }
   ],
   "cards": [
     {
       "dot": "rose",
-      "title": "BLOCK（fail-closed）",
+      "title": "BLOCK (fail-closed)",
       "items": [
-        "硬规则命中（DROP TABLE、rm -rf、TRUNCATE 等）",
-        "语义分 score ≥ 0.8",
-        "RiskEvaluator 报错"
+        "Hard-rule match (DROP TABLE, rm -rf, TRUNCATE, …)",
+        "Semantic score ≥ 0.8",
+        "RiskEvaluator error"
       ]
     },
     {
       "dot": "cyan",
-      "title": "L7 网关",
-      "items": ["监听 :8286 反向代理", "body > 1MB → 413", "GET 不经过 eval"]
+      "title": "L7 gateway",
+      "items": ["Listen :8286 reverse proxy", "body > 1MB → 413", "GET skips eval"]
     },
     {
       "dot": "emerald",
-      "title": "MCP 网关",
-      "items": ["仅代理 execute_bash_command", "BLOCK 返回 isError + reason", "与 L7 同一 eval 逻辑"]
+      "title": "MCP gateway",
+      "items": ["Proxies execute_bash_command only", "BLOCK → isError + reason", "Same eval logic as L7"]
     }
   ]
 }

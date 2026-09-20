@@ -24,9 +24,32 @@ Two entry points—**HTTP `:8286`** (L7 reverse proxy) and **MCP stdio** (`mcp-f
 | OWASP LLM category | Attack vector | Firewall defense |
 | :--- | :--- | :--- |
 | **LLM01: Prompt injection** | Malicious payloads via HTTP tools | Semantic risk scoring (TypeSafe Jev / Mock) → **403 Forbidden** |
-| **LLM06: Excessive agency** | Destructive host commands from agents | MCP gateway blocks `rm -rf`, dangerous `git` ops (hard rules) |
-| **LLM02: Sensitive info disclosure** | Credential / secret paths in tool payloads | Hard-rule regex + semantic interception (e.g. `.env` references) |
+| **LLM06: Excessive agency** | Destructive host commands from agents | MCP gateway hard rules: `rm_rf`, `system_destruct`, `git_danger`, `git_supply`, SQL DDL |
+| **LLM02: Sensitive info disclosure** | Credential / secret paths in tool payloads | `secret_leak` hard rule + semantic interception |
 | **LLM04: Model DoS** | Oversized bodies exhausting memory | **1 MB** body cap on mutating HTTP → **413 Payload Too Large** |
+
+---
+
+## Threat & rules matrix
+
+Embedded hard rules live in [`eval/rules.json`](eval/rules.json) (`go:embed`). MCP and L7 run the same list before semantic scoring.
+
+| Rule | What it blocks | Typical examples |
+| :--- | :--- | :--- |
+| **`drop_table`** | SQL `DROP TABLE` | `DROP TABLE users;` |
+| **`truncate`** | SQL `TRUNCATE` | `TRUNCATE logs;` |
+| **`rm_rf`** | `rm` with **both** recursive and force | `rm -rf /`, `rm -fr /var`, `rm --recursive --force /` |
+| **`git_danger`** | Destructive or repo-wide `git` subcommands | `git push`, `git reset --hard`, `git clean -fd`, `git config …` |
+| **`git_supply`** | Supply-chain `git` fetch paths | `git clone …`, `git submodule update …` |
+| **`system_destruct`** | Disk wipe / world-writable trees | `mkfs.ext4 …`, `dd if=… of=/dev/sda`, `chmod -R 777 /var/www` |
+| **`secret_leak`** | Reads of common secret locations | `cat .env`, `~/.ssh/id_rsa`, `~/.aws/credentials`, `/etc/shadow` |
+
+**Rule notes**
+
+- **`rm_rf`**: Matches flag **permutations** and long options—`-r`/`-f` in either order, combined short flags (e.g. `-rf`, `-fr`), and `--recursive` with `--force` (or `-f`). `rm -r` alone (no force) is **not** blocked.
+- **`git_danger`**: **`git pull` is intentionally excluded** so everyday sync workflows stay usable; push/reset/clean/rebase/remote/config/credential paths still block.
+
+On match: `firewall BLOCK [hard_rule]: <rule_name>` (MCP `isError: true`) or L7 **403** with `layer: hard_rule`.
 
 ---
 
@@ -90,6 +113,8 @@ firewall BLOCK [hard_rule]: rm_rf
 | Clone and run tests | [Quick start](#quick-start) |
 | Run the HTTP gateway | [L7 gateway](#l7-gateway) |
 | Wire Cursor MCP | [MCP (Cursor)](#mcp-cursor) |
+| Global MCP (all workspaces) | [Global Cursor MCP setup](#global-cursor-mcp-setup-all-workspaces) |
+| Threat / hard rules | [Threat & rules matrix](#threat--rules-matrix) |
 | Configure semantic scoring | [Environment](#environment-variables) |
 | Architecture details | [Architecture](#architecture) |
 | Edit hard rules | [`eval/rules.json`](eval/rules.json) |
@@ -105,8 +130,8 @@ firewall BLOCK [hard_rule]: rm_rf
 
 **Shared `eval` package**
 
-1. **Hard rules** — `DROP TABLE`, `TRUNCATE`, `rm -rf`, dangerous `git` ops, etc. → **BLOCK** ([`eval/rules.json`](eval/rules.json), `go:embed`; rebuild or restart MCP after edits)  
-2. **Semantic score** — Mock or HTTP / TypeSafe evaluator; **score ≥ 0.8** → **BLOCK**
+1. **Hard rules** — see [Threat & rules matrix](#threat--rules-matrix) ([`eval/rules.json`](eval/rules.json), `go:embed`; rebuild or restart MCP after edits)  
+2. **Semantic scoring** — Mock or HTTP / TypeSafe evaluator; **score ≥ 0.8** → **BLOCK**
 
 ```text
   HTTP (POST/PUT/DEL) ──► :8286 ──► hard rules → score ──► upstream API
@@ -173,6 +198,32 @@ go run . -backend=false -target http://127.0.0.1:8090
 - [ ] Production/CI binary: `go build -o mcp-firewall ./cmd/mcp-firewall`, point `command` at the binary
 
 See `.cursor/mcp.json.example` (detects `agent-firewall` vs `jev_demo` workspace layout).
+
+### Global Cursor MCP setup (all workspaces)
+
+Install a single binary and register it in your **user-level** Cursor config so **every workspace** routes agent shell tools through the firewall (restart Cursor after editing).
+
+```bash
+cd /path/to/agent-firewall
+go build -o ~/.local/bin/mcp-firewall ./cmd/mcp-firewall
+```
+
+`~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agent-firewall": {
+      "command": "/Users/<username>/.local/bin/mcp-firewall",
+      "args": []
+    }
+  }
+}
+```
+
+Replace `<username>` with your macOS login name (full path example: `/Users/you/.local/bin/mcp-firewall`). **Restart Cursor** (or Reload MCP) to activate system-wide `execute_bash_command` interception. Project-local `.cursor/mcp.json` still overrides per-repo when present.
+
+Pair with agent rules (`alwaysApply`): terminal **only** via `execute_bash_command`; on `firewall BLOCK` → stop, do not bypass.
 
 ### Refresh installed binary
 
