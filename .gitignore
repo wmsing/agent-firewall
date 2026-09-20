@@ -8,3 +8,8 @@ pb_data/
 bin/pocketbase
 jev_firewall.*
 jev_mcp_firewall.*
+.DS_Store
+coverage.out
+*.test
+.cursor/mcp.json
+docs/diagrams/*.visual-check.*

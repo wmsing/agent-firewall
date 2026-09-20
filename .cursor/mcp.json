@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "mcp-firewall": {
-      "command": "scripts/run-mcp-firewall.sh",
-      "args": []
-    }
-  }
-}
