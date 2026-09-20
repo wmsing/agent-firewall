@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+*.log
+/mcp-firewall
+/agent-firewall
+pb_data/
+bin/pocketbase
+jev_firewall.*
+jev_mcp_firewall.*
