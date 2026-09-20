@@ -5,6 +5,6 @@ alwaysApply: true
 
 # Repo
 
-- 模块：`firewall/`、`jev/`、`docs/spec/`；**流程见 [AGENTS.md](../AGENTS.md)**（写 spec → @ spec → `make check`）。
-- 新功能：先 `docs/spec/*.md` → 对话 `@` 该 spec → 实现 → `make check-*`。
+- 独立仓库根即 Go module：`main.go`（L7）· `cmd/mcp-firewall` · `eval/` · `docs/spec/`。
+- 新功能：先 `docs/spec/task_*.md` → 对话 `@` 该 spec → 实现 → `make check-firewall`。
 - 勿提交 `.env`；勿擅自改生产密钥。

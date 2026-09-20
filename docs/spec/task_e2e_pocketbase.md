@@ -14,5 +14,5 @@
    - 场景 C（语义高危）：Payload 触发打分拦截 → 网关 403 阻断 + 输出 slog JSON 告警。
 
 ## 产出
-- 在 firewall/ 根目录下提供一段验证脚本（如 e2e_test.sh）。
+- `scripts/e2e-pocketbase.sh`（`make e2e-pocketbase`）。
 - 更新 README 说明如何配合真实后端启动。
