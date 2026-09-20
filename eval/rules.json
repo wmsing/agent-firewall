@@ -1,7 +1,9 @@
 [
   {"name": "drop_table", "pattern": "(?i)\\bDROP\\s+TABLE\\b"},
   {"name": "truncate", "pattern": "(?i)\\bTRUNCATE\\b"},
-  {"name": "rm_rf", "pattern": "(?i)rm\\s+-rf"},
-  {"name": "git_danger", "pattern": "(?i)\\bgit(\\s+-C\\s+\\S+|\\s+--git-dir=\\S+)*\\s+(push|pull|reset|clean|rebase|filter-branch|filter-repo|remote|config|credential|send-email)\\b"},
-  {"name": "git_supply", "pattern": "(?i)\\bgit(\\s+-C\\s+\\S+|\\s+--git-dir=\\S+)*\\s+(clone|submodule)\\b"}
+  {"name": "rm_rf", "pattern": "(?i)\\brm\\b\\s+(?:(?:-[A-Za-z]*[rR][A-Za-z]*[fF][A-Za-z]*\\b|-[A-Za-z]*[fF][A-Za-z]*[rR][A-Za-z]*\\b)|(?:(?:-[rRfF]\\b|--recursive\\b|--force\\b)(?:\\s+|$)){2,}|--recursive\\b\\s+(?:--force\\b|-[fF]\\b))"},
+  {"name": "git_danger", "pattern": "(?i)\\bgit(\\s+-C\\s+\\S+|\\s+--git-dir=\\S+)*\\s+(push|reset|clean|rebase|filter-branch|filter-repo|remote|config|credential|send-email)\\b"},
+  {"name": "git_supply", "pattern": "(?i)\\bgit(\\s+-C\\s+\\S+|\\s+--git-dir=\\S+)*\\s+(clone|submodule)\\b"},
+  {"name": "system_destruct", "pattern": "(?i)(?:\\bmkfs\\b|\\bdd\\b|\\bchmod\\b(?:(?:\\s+(?:-[A-Za-z]*R[A-Za-z]*\\b|--recursive\\b))+\\s*777\\b|\\s*777\\b(?:\\s+(?:-[A-Za-z]*R[A-Za-z]*\\b|--recursive\\b))+))"},
+  {"name": "secret_leak", "pattern": "(?i)(?:~/?\\.ssh(?:/|\\b)|~/?\\.aws(?:/|\\b)|(?:^|[\\s'\"`])(?:\\./)?\\.env(?:\\b|[/\"'])|/etc/shadow\\b|\\$HOME/?\\.(?:ssh|aws)(?:/|\\b))"}
 ]

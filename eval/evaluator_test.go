@@ -86,11 +86,90 @@ func TestAssess_gitHardRules(t *testing.T) {
 		wantRule string
 	}{
 		{"git push origin main", "git_danger"},
-		{"git pull origin main", "git_danger"},
+		{"git pull origin main", ""},
 		{"git -C /repo reset --hard", "git_danger"},
 		{"git clone https://example.com/x.git", "git_supply"},
 		{"git status", ""},
 		{"git commit -m ok", ""},
+	}
+	for _, tc := range cases {
+		matched, rule := MatchHardRule([]byte(tc.cmd))
+		if tc.wantRule == "" {
+			if matched {
+				t.Fatalf("%q: want no match, got %q", tc.cmd, rule)
+			}
+			continue
+		}
+		if !matched || rule != tc.wantRule {
+			t.Fatalf("%q: want rule %q, got matched=%v rule=%q", tc.cmd, tc.wantRule, matched, rule)
+		}
+	}
+}
+
+func TestAssess_rmRfHardRule(t *testing.T) {
+	cases := []struct {
+		cmd      string
+		wantRule string
+	}{
+		{"rm -rf /tmp", "rm_rf"},
+		{"rm -fr /var", "rm_rf"},
+		{"rm -r -f /tmp", "rm_rf"},
+		{"rm -f -r /tmp", "rm_rf"},
+		{"rm --recursive --force /", "rm_rf"},
+		{"rm --recursive -f /", "rm_rf"},
+		{"rm -r --force /tmp", "rm_rf"},
+		{"rm -r /tmp", ""},
+	}
+	for _, tc := range cases {
+		matched, rule := MatchHardRule([]byte(tc.cmd))
+		if tc.wantRule == "" {
+			if matched {
+				t.Fatalf("%q: want no match, got %q", tc.cmd, rule)
+			}
+			continue
+		}
+		if !matched || rule != tc.wantRule {
+			t.Fatalf("%q: want rule %q, got matched=%v rule=%q", tc.cmd, tc.wantRule, matched, rule)
+		}
+	}
+}
+
+func TestAssess_systemDestructHardRule(t *testing.T) {
+	cases := []struct {
+		cmd      string
+		wantRule string
+	}{
+		{"mkfs.ext4 /dev/sda1", "system_destruct"},
+		{"dd if=/dev/zero of=/dev/sda", "system_destruct"},
+		{"chmod -R 777 /var/www", "system_destruct"},
+		{"chmod 777 -R /tmp", "system_destruct"},
+		{"chmod 755 /tmp", ""},
+	}
+	for _, tc := range cases {
+		matched, rule := MatchHardRule([]byte(tc.cmd))
+		if tc.wantRule == "" {
+			if matched {
+				t.Fatalf("%q: want no match, got %q", tc.cmd, rule)
+			}
+			continue
+		}
+		if !matched || rule != tc.wantRule {
+			t.Fatalf("%q: want rule %q, got matched=%v rule=%q", tc.cmd, tc.wantRule, matched, rule)
+		}
+	}
+}
+
+func TestAssess_secretLeakHardRule(t *testing.T) {
+	cases := []struct {
+		cmd      string
+		wantRule string
+	}{
+		{"cat .env", "secret_leak"},
+		{"cat ~/.ssh/id_rsa", "secret_leak"},
+		{"less ~/.aws/credentials", "secret_leak"},
+		{"sudo cat /etc/shadow", "secret_leak"},
+		{"cat $HOME/.ssh/config", "secret_leak"},
+		{"cat README.md", ""},
 	}
 	for _, tc := range cases {
 		matched, rule := MatchHardRule([]byte(tc.cmd))
