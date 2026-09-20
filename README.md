@@ -1,5 +1,10 @@
 # agent-firewall
 
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
+[![Zero Dependency](https://img.shields.io/badge/Dependencies-Zero-34D058?style=for-the-badge)](go.mod)
+[![License: MIT](https://img.shields.io/badge/License-MIT-2563EB?style=for-the-badge)](LICENSE)
+[![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-7C3AED?style=for-the-badge)](https://modelcontextprotocol.io/)
+
 **Language**: **English** | [简体中文](README.zh-CN.md)
 
 > **One line**: Before an agent hits HTTP or runs shell, traffic goes through one policy stack—**fail-closed** if checks do not pass.
@@ -198,4 +203,4 @@ Copy `.env.example` → `.env` (**do not commit**)
 
 ## License
 
-No `LICENSE` file yet. Add one before external use and update this section.
+[MIT](LICENSE) © 2026 wmsing
