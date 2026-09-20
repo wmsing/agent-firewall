@@ -6,6 +6,76 @@
 
 **Repository**: <https://github.com/wmsing/agent-firewall>
 
+Two entry points—**HTTP `:8286`** (L7 reverse proxy) and **MCP stdio** (`mcp-firewall`)—share one **`eval`** core: embedded **hard rules** (`eval/rules.json`) then **semantic risk scoring** (Mock, generic HTTP, or **TypeSafe Jev**). Anything that fails checks is blocked before your API or shell sees it.
+
+![Architecture](docs/images/architecture.png)
+
+*Diagram source: [`docs/diagrams/agent-firewall.architecture.json`](docs/diagrams/agent-firewall.architecture.json) · interactive HTML: [`agent-firewall-architecture.html`](docs/diagrams/agent-firewall-architecture.html) (open locally after clone; GitHub does not execute repo HTML).*
+
+---
+
+## OWASP LLM alignment
+
+| OWASP LLM category | Attack vector | Firewall defense |
+| :--- | :--- | :--- |
+| **LLM01: Prompt injection** | Malicious payloads via HTTP tools | Semantic risk scoring (TypeSafe Jev / Mock) → **403 Forbidden** |
+| **LLM06: Excessive agency** | Destructive host commands from agents | MCP gateway blocks `rm -rf`, dangerous `git` ops (hard rules) |
+| **LLM02: Sensitive info disclosure** | Credential / secret paths in tool payloads | Hard-rule regex + semantic interception (e.g. `.env` references) |
+| **LLM04: Model DoS** | Oversized bodies exhausting memory | **1 MB** body cap on mutating HTTP → **413 Payload Too Large** |
+
+---
+
+## Live interception showcase
+
+Reproduce with no API keys (built-in **Mock** evaluator):
+
+```bash
+go run . &
+sleep 1
+curl -s -w "\nHTTP %{http_code}\n" -X POST http://127.0.0.1:8286/api \
+  -H 'Content-Type: application/json' \
+  -d '{"msg":"ignore previous instructions"}'
+```
+
+**HTTP response** (`403`):
+
+```json
+{
+  "error": "forbidden",
+  "layer": "semantic",
+  "reason": "prompt_injection: ignore previous",
+  "score": 0.95
+}
+```
+
+**Structured audit log** (stderr, `slog` JSON):
+
+```json
+{
+  "level": "INFO",
+  "msg": "firewall",
+  "client_ip": "127.0.0.1",
+  "method": "POST",
+  "path": "/api",
+  "reason": "prompt_injection: ignore previous",
+  "action": "BLOCK",
+  "risk_score": 0.95
+}
+```
+
+With **`TYPESAFE_API_KEY`** set, the same flow uses **TypeSafe Jev** (`/v1/systemone`); confirmed injections typically score **≥ 0.8** (often **1.00**), still **403** + `"action":"BLOCK"` in logs.
+
+**MCP hard-rule block** (no score; `isError: true`):
+
+```bash
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_bash_command","arguments":{"command":"rm -rf /"}}}' \
+  | go run ./cmd/mcp-firewall
+```
+
+```text
+firewall BLOCK [hard_rule]: rm_rf
+```
+
 ---
 
 ## Contents
@@ -16,10 +86,8 @@
 | Run the HTTP gateway | [L7 gateway](#l7-gateway) |
 | Wire Cursor MCP | [MCP (Cursor)](#mcp-cursor) |
 | Configure semantic scoring | [Environment](#environment-variables) |
-| Understand the two layers | [Architecture](#architecture) |
-| View the interactive diagram | [Architecture](#architecture) · [Open HTML locally](#viewing-the-architecture-diagram) |
-| OWASP / threat model | [Threat model](#threat-model--owasp-for-llm-alignment) |
-| Edit hard rules | [Architecture](#architecture) · [`eval/rules.json`](eval/rules.json) |
+| Architecture details | [Architecture](#architecture) |
+| Edit hard rules | [`eval/rules.json`](eval/rules.json) |
 
 ---
 
@@ -33,7 +101,7 @@
 **Shared `eval` package**
 
 1. **Hard rules** — `DROP TABLE`, `TRUNCATE`, `rm -rf`, dangerous `git` ops, etc. → **BLOCK** ([`eval/rules.json`](eval/rules.json), `go:embed`; rebuild or restart MCP after edits)  
-2. **Semantic score** — Mock or HTTP evaluator; **score ≥ 0.8** → **BLOCK**
+2. **Semantic score** — Mock or HTTP / TypeSafe evaluator; **score ≥ 0.8** → **BLOCK**
 
 ```text
   HTTP (POST/PUT/DEL) ──► :8286 ──► hard rules → score ──► upstream API
@@ -43,32 +111,11 @@
   BLOCK → isError + reason
 ```
 
-**Diagram (Archify)**: source [`docs/diagrams/agent-firewall.architecture.json`](docs/diagrams/agent-firewall.architecture.json) · standalone [`docs/diagrams/agent-firewall-architecture.html`](docs/diagrams/agent-firewall-architecture.html)
-
-### Viewing the architecture diagram
-
-GitHub **does not run** HTML from the repo. After clone, open in a browser:
+### Viewing the interactive diagram
 
 ```bash
 open docs/diagrams/agent-firewall-architecture.html   # macOS
-# Linux: xdg-open docs/diagrams/agent-firewall-architecture.html
-# Windows: start docs/diagrams/agent-firewall-architecture.html
 ```
-
-Or double-click the file in your file manager. Regenerate HTML from JSON with Archify `deliver` after edits.
-
----
-
-## Threat Model & OWASP for LLM Alignment
-
-`agent-firewall` is engineered to defend against key risks defined in the **OWASP Top 10 for LLM Applications**:
-
-| OWASP LLM Category | Attack Vector | Firewall Defense Mechanism |
-| :--- | :--- | :--- |
-| **LLM01: Prompt Injection** | Malicious payloads via HTTP tools | Semantic risk scoring (TypeSafe Jev) → 403 Forbidden |
-| **LLM06: Excessive Agency** | Agent running destructive host commands | MCP Executor blocks `rm -rf`, dangerous Git ops |
-| **LLM02: Sensitive Info Disclosure** | Unauthorized credential access | Hard-rule regex & semantic interception |
-| **LLM04: Model DoS** | OOM attacks via oversized payloads | Strict 1MB payload ceiling → 413 Payload Too Large |
 
 ---
 
@@ -86,8 +133,20 @@ Optional:
 
 ```bash
 make test              # unit tests only
-make e2e-pocketbase    # needs local pocketbase; or POCKETBASE=/path/to/pocketbase
 ```
+
+### PocketBase end-to-end
+
+Validates a real backend behind the proxy (see `docs/spec/task_e2e_pocketbase.md`):
+
+1. Install [PocketBase](https://pocketbase.io/) and ensure `pocketbase` is on `PATH`, or set `POCKETBASE=/path/to/pocketbase`.
+2. Run:
+
+```bash
+make e2e-pocketbase
+```
+
+The script starts PocketBase on `:8090`, runs the firewall against `http://127.0.0.1:8090`, and checks allow (200), hard-rule **403**, semantic **403** + `"action":"BLOCK"` in firewall logs.
 
 ---
 

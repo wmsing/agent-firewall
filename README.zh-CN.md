@@ -6,6 +6,10 @@
 
 **仓库**：<https://github.com/wmsing/agent-firewall>
 
+双入口 **HTTP `:8286`** 与 **MCP stdio**（`mcp-firewall`）共用 **`eval`**：先 [`eval/rules.json`](eval/rules.json) 硬规则，再语义打分（Mock / HTTP / **TypeSafe Jev**）。
+
+![Architecture](docs/images/architecture.png)
+
 ---
 
 ## 目录
@@ -86,8 +90,12 @@ make check-firewall    # 集成测试 + go test
 
 ```bash
 make test              # 仅单元测试
-make e2e-pocketbase    # 要本机 pocketbase；或 POCKETBASE=/path/to/pocketbase
 ```
+
+### PocketBase 端到端
+
+1. 安装 [PocketBase](https://pocketbase.io/) 并保证 `pocketbase` 在 PATH，或 `POCKETBASE=/path/to/pocketbase`。
+2. 执行 `make e2e-pocketbase`（见 `docs/spec/task_e2e_pocketbase.md`）：起 `:8090` 后端 + 防火墙，验证放行、硬规则 403、语义 403 与 `"action":"BLOCK"` 日志。
 
 ---
 
