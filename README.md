@@ -15,6 +15,7 @@
 | 接 Cursor MCP | [MCP（Cursor）](#mcpcursor) |
 | 配语义判别 API | [环境变量](#环境变量) |
 | 看懂两层干啥 | [两层一览](#两层一览) |
+| OWASP / 威胁模型 | [Threat Model](#threat-model--owasp-for-llm-alignment) |
 | 改硬规则 | [两层一览](#两层一览) · `eval/rules.json` |
 
 ---
@@ -38,6 +39,19 @@
   MCP execute_bash_* ──► mcp-firewall ──► 同一 eval ──► /bin/bash -c
   BLOCK → isError + reason
 ```
+
+---
+
+## Threat Model & OWASP for LLM Alignment
+
+`agent-firewall` is engineered to defend against key risks defined in the **OWASP Top 10 for LLM Applications**:
+
+| OWASP LLM Category | Attack Vector | Firewall Defense Mechanism |
+| :--- | :--- | :--- |
+| **LLM01: Prompt Injection** | Malicious payloads via HTTP tools | Semantic risk scoring (TypeSafe Jev) → 403 Forbidden |
+| **LLM06: Excessive Agency** | Agent running destructive host commands | MCP Executor blocks `rm -rf`, dangerous Git ops |
+| **LLM02: Sensitive Info Disclosure** | Unauthorized credential access | Hard-rule regex & semantic interception |
+| **LLM04: Model DoS** | OOM attacks via oversized payloads | Strict 1MB payload ceiling → 413 Payload Too Large |
 
 ---
 
