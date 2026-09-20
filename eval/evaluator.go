@@ -31,6 +31,8 @@ var hardRules = []hardRule{
 	{name: "drop_table", pattern: regexp.MustCompile(`(?i)\bDROP\s+TABLE\b`)},
 	{name: "truncate", pattern: regexp.MustCompile(`(?i)\bTRUNCATE\b`)},
 	{name: "rm_rf", pattern: regexp.MustCompile(`(?i)rm\s+-rf`)},
+	{name: "git_danger", pattern: regexp.MustCompile(`(?i)\bgit(\s+-C\s+\S+|\s+--git-dir=\S+)*\s+(push|pull|reset|clean|rebase|filter-branch|filter-repo|remote|config|credential|send-email)\b`)},
+	{name: "git_supply", pattern: regexp.MustCompile(`(?i)\bgit(\s+-C\s+\S+|\s+--git-dir=\S+)*\s+(clone|submodule)\b`)},
 }
 
 func MatchHardRule(body []byte) (matched bool, rule string) {
@@ -123,11 +125,19 @@ func (h *HTTPRiskEvaluator) Evaluate(ctx context.Context, body []byte) (float64,
 	return out.Score, out.Reason, nil
 }
 
-// NewRiskEvaluator uses Mock when EVALUATOR_API_KEY is empty; otherwise HTTP to EVALUATOR_API_URL.
+// NewRiskEvaluator: TYPESAFE_API_KEY → TypeSafe; else EVALUATOR_API_KEY → generic HTTP; else Mock.
 func NewRiskEvaluator() RiskEvaluator {
+	if tsKey := strings.TrimSpace(os.Getenv("TYPESAFE_API_KEY")); tsKey != "" {
+		base := strings.TrimSpace(os.Getenv("TYPESAFE_BASE_URL"))
+		model := strings.TrimSpace(os.Getenv("TYPESAFE_DEFAULT_MODEL"))
+		ev := NewTypeSafeEvaluator(tsKey, base, model)
+		log.Printf("evaluator: TypeSafe %s model=%s (timeout %s)", ev.baseURL, ev.model, ev.timeout)
+		return ev
+	}
+
 	key := strings.TrimSpace(os.Getenv("EVALUATOR_API_KEY"))
 	if key == "" {
-		log.Println("evaluator: mock (no EVALUATOR_API_KEY)")
+		log.Println("evaluator: mock (no TYPESAFE_API_KEY or EVALUATOR_API_KEY)")
 		return MockRiskEvaluator{}
 	}
 	apiURL := strings.TrimSpace(os.Getenv("EVALUATOR_API_URL"))

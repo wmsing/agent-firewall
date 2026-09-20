@@ -79,3 +79,29 @@ func TestAssess_hardRule(t *testing.T) {
 		t.Fatalf("got blocked=%v layer=%q reason=%q", blocked, layer, reason)
 	}
 }
+
+func TestAssess_gitHardRules(t *testing.T) {
+	cases := []struct {
+		cmd      string
+		wantRule string
+	}{
+		{"git push origin main", "git_danger"},
+		{"git pull origin main", "git_danger"},
+		{"git -C /repo reset --hard", "git_danger"},
+		{"git clone https://example.com/x.git", "git_supply"},
+		{"git status", ""},
+		{"git commit -m ok", ""},
+	}
+	for _, tc := range cases {
+		matched, rule := MatchHardRule([]byte(tc.cmd))
+		if tc.wantRule == "" {
+			if matched {
+				t.Fatalf("%q: want no match, got %q", tc.cmd, rule)
+			}
+			continue
+		}
+		if !matched || rule != tc.wantRule {
+			t.Fatalf("%q: want rule %q, got matched=%v rule=%q", tc.cmd, tc.wantRule, matched, rule)
+		}
+	}
+}

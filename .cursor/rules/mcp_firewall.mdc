@@ -1,0 +1,18 @@
+---
+description: Enforce execution of all terminal commands via mcp-firewall
+globs: *
+alwaysApply: true
+---
+
+# Safe Command Execution Policy
+
+## Core Directives
+1. **Mandatory MCP Tooling**:
+   - You MUST NEVER execute commands using Cursor's native terminal/shell environment directly.
+   - You MUST ALWAYS invoke the `execute_bash_command` MCP tool for any script, migration, build, test, or terminal task.
+
+2. **Error & Blocked Handling**:
+   - If `execute_bash_command` returns `isError: true` or indicates a security block (e.g., regex violation or risk score >= 0.8):
+     - STOP immediately.
+     - DO NOT attempt alternative bash bypasses or workarounds.
+     - Report the blocked reason cleanly to the user.

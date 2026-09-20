@@ -1,0 +1,10 @@
+---
+description: 仓库协作地图与通用原则
+alwaysApply: true
+---
+
+# Repo
+
+- 模块：`firewall/`、`jev/`、`docs/spec/`；**流程见 [AGENTS.md](../AGENTS.md)**（写 spec → @ spec → `make check`）。
+- 新功能：先 `docs/spec/*.md` → 对话 `@` 该 spec → 实现 → `make check-*`。
+- 勿提交 `.env`；勿擅自改生产密钥。

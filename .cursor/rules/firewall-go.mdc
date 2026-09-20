@@ -1,0 +1,12 @@
+---
+description: Go Agent 防火墙约定
+globs: firewall/**/*
+alwaysApply: false
+---
+
+# Agent Firewall (Go)
+
+- 需求对齐：[`docs/spec/task_firewall_mvp.md`](../../docs/spec/task_firewall_mvp.md)
+- Go **1.22+**；仅标准库（`net/http`、`httputil.ReverseProxy`）。
+- 原则：低延迟（非 mutating 不读 body）；**fail-closed**（读 body / 评估失败即 403）。
+- 默认 `:8286` → `:8287`；验收：`make check-firewall`（见 spec Done 节）。

@@ -3,6 +3,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# 集成测试固定 Mock；勿继承 shell / .env 里的远程判别 Key。
+unset TYPESAFE_API_KEY TYPESAFE_BASE_URL TYPESAFE_DEFAULT_MODEL TYPESAFE_EVALUATOR_TIMEOUT
+unset EVALUATOR_API_KEY EVALUATOR_API_URL
+
 for p in 8286 8287; do
   lsof -ti ":$p" 2>/dev/null | xargs kill -9 2>/dev/null || true
 done
