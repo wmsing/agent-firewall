@@ -86,18 +86,23 @@ func TestTypeSafeEvaluator_timeout(t *testing.T) {
 	}
 }
 
-func TestNewRiskEvaluator_prefersTypesafe(t *testing.T) {
+func TestNewRiskEvaluator_httpWithTypesafeFallback(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "ts")
 	t.Setenv("TYPESAFE_BASE_URL", "http://example.test")
 	t.Setenv("EVALUATOR_API_KEY", "other")
 	t.Setenv("EVALUATOR_API_URL", "http://example.test/eval")
 
 	ev := NewRiskEvaluator()
-	ts, ok := ev.(*TypeSafeEvaluator)
+	fb, ok := ev.(*fallbackRiskEvaluator)
 	if !ok {
-		t.Fatalf("want *TypeSafeEvaluator, got %T", ev)
+		t.Fatalf("want *fallbackRiskEvaluator, got %T", ev)
 	}
-	if ts.apiKey != "ts" || ts.baseURL != "http://example.test" {
-		t.Fatalf("unexpected evaluator config: key=%q base=%q", ts.apiKey, ts.baseURL)
+	primary, ok := fb.primary.(*HTTPRiskEvaluator)
+	if !ok || primary.url != "http://example.test/eval" {
+		t.Fatalf("unexpected primary: %T", fb.primary)
+	}
+	ts, ok := fb.fallback.(*TypeSafeEvaluator)
+	if !ok || ts.apiKey != "ts" || ts.baseURL != "http://example.test" {
+		t.Fatalf("unexpected fallback: %T", fb.fallback)
 	}
 }

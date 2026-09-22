@@ -55,6 +55,39 @@ func TestHTTPRiskEvaluator_JSONScore(t *testing.T) {
 	}
 }
 
+func TestFallbackRiskEvaluator_usesTypesafeOnPrimaryError(t *testing.T) {
+	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "down", http.StatusServiceUnavailable)
+	}))
+	defer httpSrv.Close()
+
+	tsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != typesafeSystemOnePath {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(typesafeSystemOneResponse{
+			Answers: map[string]typesafeScoreAnswer{
+				typesafeRiskQuestion: {Type: "score", Score: 0.12, Confidence: 0.9},
+			},
+		})
+	}))
+	defer tsSrv.Close()
+
+	ev := &fallbackRiskEvaluator{
+		primary:  newHTTPRiskEvaluator(httpSrv.URL, "k"),
+		fallback: NewTypeSafeEvaluator("ts", tsSrv.URL, "jev-latest"),
+	}
+	score, _, err := ev.Evaluate(context.Background(), []byte("ls"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if score != 0.12 {
+		t.Fatalf("want fallback score 0.12 got %v", score)
+	}
+}
+
 func TestHTTPRiskEvaluator_timeout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(500 * time.Millisecond)

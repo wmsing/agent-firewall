@@ -111,9 +111,52 @@ func (h *HTTPRiskEvaluator) Evaluate(ctx context.Context, body []byte) (float64,
 	return out.Score, out.Reason, nil
 }
 
-// NewRiskEvaluator: TYPESAFE_API_KEY → TypeSafe; else EVALUATOR_API_KEY → generic HTTP; else Mock.
+type fallbackRiskEvaluator struct {
+	primary  RiskEvaluator
+	fallback RiskEvaluator
+}
+
+func (f *fallbackRiskEvaluator) Evaluate(ctx context.Context, body []byte) (float64, string, error) {
+	score, reason, err := f.primary.Evaluate(ctx, body)
+	if err == nil {
+		return score, reason, nil
+	}
+	log.Printf("evaluator: primary failed (%v), using TypeSafe fallback", err)
+	return f.fallback.Evaluate(ctx, body)
+}
+
+func newHTTPRiskEvaluator(apiURL, key string) *HTTPRiskEvaluator {
+	return &HTTPRiskEvaluator{
+		client: &http.Client{Timeout: evaluatorHTTPTimeout + 50*time.Millisecond},
+		url:    apiURL,
+		apiKey: key,
+	}
+}
+
+// NewRiskEvaluator: EVALUATOR_* HTTP first; with TYPESAFE_API_KEY also set, fallback to TypeSafe on primary error; else TypeSafe-only or Mock.
 func NewRiskEvaluator() RiskEvaluator {
-	if tsKey := strings.TrimSpace(os.Getenv("TYPESAFE_API_KEY")); tsKey != "" {
+	tsKey := strings.TrimSpace(os.Getenv("TYPESAFE_API_KEY"))
+	evalKey := strings.TrimSpace(os.Getenv("EVALUATOR_API_KEY"))
+	apiURL := strings.TrimSpace(os.Getenv("EVALUATOR_API_URL"))
+
+	if evalKey != "" && apiURL == "" {
+		log.Fatal("EVALUATOR_API_KEY set but EVALUATOR_API_URL is empty")
+	}
+
+	if apiURL != "" && evalKey != "" {
+		httpEv := newHTTPRiskEvaluator(apiURL, evalKey)
+		if tsKey != "" {
+			base := strings.TrimSpace(os.Getenv("TYPESAFE_BASE_URL"))
+			model := strings.TrimSpace(os.Getenv("TYPESAFE_DEFAULT_MODEL"))
+			ts := NewTypeSafeEvaluator(tsKey, base, model)
+			log.Printf("evaluator: HTTP %s (timeout %s), TypeSafe fallback %s", apiURL, evaluatorHTTPTimeout, ts.baseURL)
+			return &fallbackRiskEvaluator{primary: httpEv, fallback: ts}
+		}
+		log.Printf("evaluator: HTTP %s (timeout %s)", apiURL, evaluatorHTTPTimeout)
+		return httpEv
+	}
+
+	if tsKey != "" {
 		base := strings.TrimSpace(os.Getenv("TYPESAFE_BASE_URL"))
 		model := strings.TrimSpace(os.Getenv("TYPESAFE_DEFAULT_MODEL"))
 		ev := NewTypeSafeEvaluator(tsKey, base, model)
@@ -121,19 +164,6 @@ func NewRiskEvaluator() RiskEvaluator {
 		return ev
 	}
 
-	key := strings.TrimSpace(os.Getenv("EVALUATOR_API_KEY"))
-	if key == "" {
-		log.Println("evaluator: mock (no TYPESAFE_API_KEY or EVALUATOR_API_KEY)")
-		return MockRiskEvaluator{}
-	}
-	apiURL := strings.TrimSpace(os.Getenv("EVALUATOR_API_URL"))
-	if apiURL == "" {
-		log.Fatal("EVALUATOR_API_KEY set but EVALUATOR_API_URL is empty")
-	}
-	log.Printf("evaluator: HTTP %s (timeout %s)", apiURL, evaluatorHTTPTimeout)
-	return &HTTPRiskEvaluator{
-		client: &http.Client{Timeout: evaluatorHTTPTimeout + 50*time.Millisecond},
-		url:    apiURL,
-		apiKey: key,
-	}
+	log.Println("evaluator: mock (no EVALUATOR_API_KEY or TYPESAFE_API_KEY)")
+	return MockRiskEvaluator{}
 }
