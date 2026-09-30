@@ -1,0 +1,27 @@
+# Secrets & credentials — keep out of agent context (LLM02/08)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/*credentials*
+**/*secret*
+**/*.pem
+**/*.key
+**/id_rsa
+**/id_ed25519
+**/*.p12
+**/*.pfx
+
+# Large / noisy artifacts
+**/node_modules/**
+**/.git/**
+**/dist/**
+**/build/**
+**/.next/**
+**/coverage/**
+**/*.log
+**/__pycache__/**
+**/.venv/**
+**/venv/**

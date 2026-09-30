@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(ls)",
+      "Shell(git status)",
+      "Shell(git diff)",
+      "Shell(git log)",
+      "Shell(git branch)",
+      "WebFetch(docs.cursor.com)",
+      "WebFetch(cursor.com)",
+      "WebFetch(docs.github.com)",
+      "WebFetch(raw.githubusercontent.com)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*credentials*)",
+      "Read(**/*secret*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Write(**/.env)",
+      "Write(**/.env.*)",
+      "Shell(rm)",
+      "Shell(rm -rf)",
+      "Shell(curl)",
+      "Shell(wget)",
+      "Shell(nc)",
+      "Shell(ncat)",
+      "Shell(ssh)",
+      "Shell(scp)",
+      "Shell(sudo)",
+      "Shell(chmod 777)",
+      "Shell(git push --force)",
+      "Shell(git push -f)",
+      "Shell(git reset --hard)",
+      "Shell(git clean -f)",
+      "Shell(git clean -fd)",
+      "Shell(git checkout .)",
+      "Shell(git restore .)",
+      "Shell(git branch -D)"
+    ]
+  }
+}
