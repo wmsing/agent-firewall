@@ -160,7 +160,7 @@ open docs/diagrams/agent-firewall-architecture.html   # macOS
 ```bash
 git clone https://github.com/wmsing/agent-firewall.git
 cd agent-firewall
-make check-firewall    # integration script + go test
+make check-firewall    # integration + go test; script unsets TYPESAFE_* / EVALUATOR_* (Mock L2, no live Jev)
 ```
 
 Optional:
@@ -231,7 +231,7 @@ go build -o ~/.local/bin/mcp-firewall ./cmd/mcp-firewall
 
 Replace `<username>` with your macOS login name (full path example: `/Users/you/.local/bin/mcp-firewall`).
 
-**TypeSafe `env` (optional)** — Set `TYPESAFE_API_KEY` to your key to enable **Layer 2** (Jev semantic scoring). `TYPESAFE_BASE_URL` defaults to `https://api.typesafe.ai` when empty. Omit the `env` block or leave `TYPESAFE_API_KEY` blank for **local mode**: Layer 1 hard rules always run; Layer 2 uses the offline **Mock** evaluator (no TypeSafe calls). Do not commit real keys; use Cursor user config or a local `.env` loaded by your wrapper script.
+**TypeSafe `env` (optional)** — Put `TYPESAFE_API_KEY` in **`mcp.json` → `env`** (user `~/.cursor/mcp.json` or project `.cursor/mcp.json`). That is what the MCP process reads. **`scripts/run-mcp-firewall.sh` does not source `.env`.** A repo `.env` is only for your shell / `go run` one-liners unless you export or wire it yourself. `TYPESAFE_BASE_URL` defaults to `https://api.typesafe.ai` when empty. Omit `env` or leave the key blank for **local mode**: Layer 1 always runs; Layer 2 is **Mock** (no TypeSafe). Do not commit real keys.
 
 **Restart Cursor** (or Reload MCP) after edits. Project-local `.cursor/mcp.json` still overrides per-repo when present.
 

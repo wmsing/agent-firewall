@@ -88,7 +88,7 @@ open docs/diagrams/agent-firewall-architecture.html   # macOS
 ```bash
 git clone https://github.com/wmsing/agent-firewall.git
 cd agent-firewall
-make check-firewall    # 集成测试 + go test
+make check-firewall    # 集成 + go test；脚本会 unset TYPESAFE_* / EVALUATOR_*（Mock L2，不测真 Jev）
 ```
 
 可选：
@@ -151,7 +151,7 @@ go build -o ~/.local/bin/mcp-firewall ./cmd/mcp-firewall
 
 将 `<username>` 换成你的 macOS 登录名（示例：`/Users/you/.local/bin/mcp-firewall`）。
 
-**TypeSafe `env`（可选）** — 填入 `TYPESAFE_API_KEY` 以启用 **Layer 2**（Jev 语义打分）。`TYPESAFE_BASE_URL` 留空时默认为 `https://api.typesafe.ai`。省略 `env` 或留空 `TYPESAFE_API_KEY` 即为 **本地模式**：Layer 1 硬规则始终生效；Layer 2 使用离线 **Mock**（不调用 TypeSafe）。勿提交真实 Key；用 Cursor 用户配置或本地 `.env`（由启动脚本加载）。
+**TypeSafe `env`（可选）** — `TYPESAFE_API_KEY` 写在 **`mcp.json` 的 `env`**（用户级 `~/.cursor/mcp.json` 或项目 `.cursor/mcp.json`），MCP 进程只认这里。**`scripts/run-mcp-firewall.sh` 不会 `source .env`**；仓库 `.env` 仅供本机 shell / 手写 `go run` 自检，除非你自行 export 或改启动脚本。`TYPESAFE_BASE_URL` 留空默认为 `https://api.typesafe.ai`。无 key 时为 **本地模式**：L1 照常，L2 为 **Mock**。勿提交真实 Key。
 
 项目内 `.cursor/mcp.json` 仍可按仓库覆盖上述全局配置。
 
