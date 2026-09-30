@@ -70,14 +70,20 @@ open docs/diagrams/agent-firewall-architecture.html   # macOS
 
 ## Threat Model & OWASP for LLM Alignment
 
-`agent-firewall` is engineered to defend against key risks defined in the **OWASP Top 10 for LLM Applications**:
+对照 **[OWASP Top 10 for LLM Applications (2025)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)**。下列「本仓库防护」仅当流量走 **MCP `execute_bash_command`** 或 **L7 代理**时成立；IDE 自带终端绕过则无效。**LLM02** 可叠加 Cursor 基线（`.cursorignore`、读文件 hook、`cli.json`），与 `eval` 分开配置。
 
-| OWASP LLM Category | Attack Vector | Firewall Defense Mechanism |
-| :--- | :--- | :--- |
-| **LLM01: Prompt Injection** | Malicious payloads via HTTP tools | Semantic risk scoring (TypeSafe Jev) → 403 Forbidden |
-| **LLM06: Excessive Agency** | Agent running destructive host commands | MCP Executor blocks `rm -rf`, dangerous Git ops |
-| **LLM02: Sensitive Info Disclosure** | Unauthorized credential access | Hard-rule regex & semantic interception |
-| **LLM04: Model DoS** | OOM attacks via oversized payloads | Strict 1MB payload ceiling → 413 Payload Too Large |
+| # | 类别 | 典型攻击 | 本仓库防护 |
+| :--- | :--- | :--- | :--- |
+| **LLM01** | 提示注入 | 对话/工具/HTTP body 里藏恶意指令 | **部分→强** — L2 语义分（Jev / Mock / HTTP 判别器）；混淆（如 Base64→`sh`）需 **Jev**；HTTP **403** / MCP `BLOCK [semantic]` |
+| **LLM02** | 敏感信息泄露 | 密钥、PII、内部资料进回复或工具 | **部分** — L1 `secret_leak`；L2 关键词/语义；配合 `.cursorignore` + 读密钥 hook（`run-mcp-firewall.sh` 不自动加载） |
+| **LLM03** | 供应链 | 恶意 MCP/插件/依赖/模型 | **部分** — L1 `git_supply`（`git clone`、`git submodule`）；**人工**审 `.cursor/mcp.json` 工具面；不扫包/模型来源 |
+| **LLM04** | 数据与模型投毒 | 训练/RAG/微调数据被掺毒 | **不在范围** — 运行时网关，不校验数据集或权重 |
+| **LLM05** | 输出处理不当 | 把模型输出当 SQL/shell/代码直接执行 | **强**（在路径上）— 进上游 HTTP 或 `bash -c` 前同一套 **L1→L2**；BLOCK 即 fail-closed |
+| **LLM06** | 过度代理 | Agent 删库、改生产、破坏性主机操作 | **强**（在路径上）— L1 `rm_rf`、`git_danger`、`system_destruct`、SQL DDL 等 |
+| **LLM07** | 系统提示泄露 | 套出 system prompt / 隐藏策略 | **不在范围** — 不拦模型对话面的提示词外泄 |
+| **LLM08** | 向量与嵌入弱点 | RAG 投毒、跨租户读文档 | **不在范围** — 无向量库/嵌入管线 |
+| **LLM09** | 错误信息 | 胡编内容被当真造成决策损失 | **不在范围** — 管执行安全，不管内容真伪 |
+| **LLM10** | 无界消耗 | 超大请求、工具死循环、API/算力打爆 | **部分** — 变更类 HTTP body **>1MB → 413**；无按会话 token/工具预算 |
 
 ---
 

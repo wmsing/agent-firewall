@@ -21,12 +21,20 @@ Two entry points—**HTTP `:8286`** (L7 reverse proxy) and **MCP stdio** (`mcp-f
 
 ## OWASP LLM alignment
 
-| OWASP LLM category | Attack vector | Firewall defense |
-| :--- | :--- | :--- |
-| **LLM01: Prompt injection** | Malicious payloads via HTTP tools | Semantic risk scoring (TypeSafe Jev / Mock) → **403 Forbidden** |
-| **LLM06: Excessive agency** | Destructive host commands from agents | MCP gateway hard rules: `rm_rf`, `system_destruct`, `git_danger`, `git_supply`, SQL DDL |
-| **LLM02: Sensitive info disclosure** | Credential / secret paths in tool payloads | `secret_leak` hard rule + semantic interception |
-| **LLM04: Model DoS** | Oversized bodies exhausting memory | **1 MB** body cap on mutating HTTP → **413 Payload Too Large** |
+Maps to **[OWASP Top 10 for LLM Applications (2025)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)**. Defense applies when traffic goes through **MCP `execute_bash_command`** or the **L7 proxy**—not IDE shell bypasses. Optional Cursor baseline (`.cursorignore`, read hooks, `cli.json`) complements **LLM02** but is separate from `eval`.
+
+| # | Category | Typical attack | Defense (this repo) |
+| :--- | :--- | :--- | :--- |
+| **LLM01** | Prompt injection | Hidden instructions in chat, tools, or HTTP bodies | **Partial → strong** — L2 semantic score (TypeSafe Jev / Mock / HTTP evaluator); obfuscation (e.g. Base64→`sh`) needs **Jev**; HTTP **403** / MCP `BLOCK [semantic]` |
+| **LLM02** | Sensitive information disclosure | Model or tools leak secrets, PII, internal docs | **Partial** — L1 `secret_leak` on command/body strings; L2 keyword/semantic hits; pair with `.cursorignore` + secret-read hooks (not loaded by `run-mcp-firewall.sh`) |
+| **LLM03** | Supply chain | Malicious MCP servers, plugins, dependencies, models | **Partial** — L1 `git_supply` (`git clone`, `git submodule`); **manual** MCP allowlist in `.cursor/mcp.json`; no package/model provenance scanning |
+| **LLM04** | Data & model poisoning | Poisoned training, RAG, or fine-tune data | **Out of scope** — runtime gateway; does not validate datasets or model weights |
+| **LLM05** | Improper output handling | Treating model output as SQL/shell/code without checks | **Strong** (on-path) — same **L1 → L2** gate before upstream HTTP or `/bin/bash -c`; fail-closed on BLOCK |
+| **LLM06** | Excessive agency | Agent deletes data, changes prod, runs destructive ops | **Strong** (on-path) — L1 `rm_rf`, `git_danger`, `system_destruct`, SQL DDL (`drop_table`, `truncate`), etc. |
+| **LLM07** | System prompt leakage | Attacks that extract system prompts or hidden policies | **Out of scope** — no prompt-vault or exfiltration filter on model I/O |
+| **LLM08** | Vector & embedding weaknesses | RAG retrieval poisoning, cross-tenant doc bleed | **Out of scope** — no vector DB or embedding pipeline |
+| **LLM09** | Misinformation | Harmful or false model answers trusted as fact | **Out of scope** — policy is execution safety, not content correctness |
+| **LLM10** | Unbounded consumption | Huge prompts, tool loops, API cost / DoS | **Partial** — mutating HTTP bodies **> 1 MB → 413**; no per-session token/tool budget |
 
 ---
 
